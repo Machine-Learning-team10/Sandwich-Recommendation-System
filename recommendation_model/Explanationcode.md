@@ -67,7 +67,7 @@
 
 ---
 
-## 3) Filtering method to use (제안서 반영)
+## 3) Filtering method to use 
 
 ### 3.1 User-based Collaborative Filtering
 - **핵심 아이디어:** 나와 **유사한 사용자**(선호 패턴이 비슷한 사용자)를 찾고, 그들의 평가를 가중 평균하여 **내가 아직 평가하지 않은 조합의 점수**를 예측.
@@ -94,7 +94,7 @@
 
 ---
 
-## 4) Machine Learning model to use (제안서 반영)
+## 4) Machine Learning model to use 
 
 ### 4.1 Biased Matrix Factorization (MF)
 - **모델 수식:**  
