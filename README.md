@@ -1,6 +1,6 @@
 # 🥪 Machine Learning Term Project — Team 10  
 **Team Members and Roles:**  
-Song Young-woo (202135546) - Data generation, preprocessing, proposal writing, presentation material creation  
+Song Young-woo (202135546) - Data generation, proposal writing, ppt creation  
 Hyun Gwan (202135596) - Model evaluation  
 Hwang Sung-min (202135599) - System modeling, GitHub documentation  
 Oh Ye-jin (202234908) - Presentation  
