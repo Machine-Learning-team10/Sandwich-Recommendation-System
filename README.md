@@ -1,79 +1,81 @@
 # 🥪 Machine Learning Term Project — Team 10  
-**Team Members and roll:**  
-송영우 (202135546) - 데이터 제작, 전처리, proposal제작, 발표자료 제작  
-현관 (202135596) - 모델 평가  
-황성민 (202135599) - 시스템 모델링, 깃허브 문서 담당  
-오예진 (202234908) - 발표  
+**Team Members and Roles:**  
+Song Young-woo (202135546) - Data generation, preprocessing, proposal writing, presentation material creation  
+Hyun Gwan (202135596) - Model evaluation  
+Hwang Sung-min (202135599) - System modeling, GitHub documentation  
+Oh Ye-jin (202234908) - Presentation  
 
 ---
 
 ## 1️⃣ Objective of the System
 
 **Goal:**  
-개인 맞춤형 샌드위치 추천 시스템을 통해 고객 경험과 만족도를 향상시키고,  
-동시에 재료 신선도와 재고 관리 효율을 최적화하는 것.
+To enhance customer experience and satisfaction through a **personalized sandwich recommendation system**,  
+while simultaneously optimizing ingredient freshness and inventory management efficiency.
 
 **Assumptions:**
-- 모든 샌드위치의 가격은 동일하다.  
-- 각 재료 카테고리(Bread, Vegetable, Meat, Sauce)별로 하나의 재료만 선택 가능하다.  
-- 사용자의 재료 선호도와 샌드위치 조합 평점 간의 관계는 **선형(linear)** 관계로 가정한다.
+- All sandwiches have the same price.  
+- Each ingredient category (Bread, Vegetable, Meat, Sauce) allows only **one ingredient selection**.  
+- The relationship between user ingredient preference and sandwich rating is assumed to be **linear**.
 
 ---
 
 ## 2️⃣ Datasets to Use
 
-### 데이터 생성 절차 요약
+### Overview of Data Generation Process
 
 1. **Initialize User Preferences**  
-   - 500명의 사용자 각각에게 20개 재료에 대해 0~5점(0.5 단위)으로 선호도 부여  
-   - 5개 재료 카테고리별 가중치 초기화  
+   - 500 users are assigned preference scores (0–5, step 0.5) for 20 ingredients.  
+   - Initialize weights for 5 ingredient categories.
 
 2. **Apply Variations**  
-   - 사용자별 평균 선호도 편향 추가  
-   - 랜덤 노이즈 삽입  
-   - 재료 카테고리별 분산 적용 (예: Bread는 낮은 분산, Meat는 높은 분산)
+   - Add user-specific preference biases.  
+   - Insert random noise.  
+   - Apply category-specific variance (e.g., Bread has low variance, Meat has high variance).
 
 3. **Select Representative Combinations**  
-   - 총 625개 가능한 조합 중 대표 50개 조합 선정  
-   - 각 사용자에게 30개 조합 할당  
+   - From 625 possible combinations, select 50 representative sandwich combinations.  
+   - Assign 30 combinations per user.
 
 4. **Include Long-Tail Combinations**  
-   - 남은 575개 조합 중 10개씩 추가로 배정하여 **롱테일 선호** 반영  
+   - Add 10 combinations randomly selected from the remaining 575 combinations  
+     to reflect **long-tail preference**.
 
 5. **Compute Combination Ratings**  
-   - 재료별 선호도의 선형결합(linear combination)으로 조합 평점 계산  
+   - Calculate sandwich ratings as a **linear combination** of ingredient preferences.
 
 6. **Apply Demographic and Dietary Adjustments**  
-   - 성별, 연령대별 bias 추가  
-   - 채식주의자 또는 알레르기 재료 포함 시 평점 -1점 패널티 적용  
+   - Add bias based on gender and age group.  
+   - Apply a -1 point penalty if a sandwich contains ingredients the user is allergic to  
+     or violates vegetarian restrictions.
 
 7. **Generate Training and Testing Sets**  
-   - 위 과정을 두 번 반복하여 **학습용(train)** 과 **테스트용(test)** 데이터셋 생성  
+   - Repeat the above process twice to create **train** and **test** datasets.
 
 ---
 
 ### Dataset Composition
 
 #### 🧑 User Dataset
-- 기본 사용자 정보 (gender, age, dietary info)  
-- 재료별 선호 점수  
-- 카테고리 가중치  
-- 사용자 평균 편향(bias)
+- Basic user information (gender, age, dietary info)  
+- Ingredient preference scores  
+- Category weights  
+- User average bias  
 
 #### 🥬 Ingredient Dataset
 | Category | Ingredient | Calories |
 |-----------|-------------|-----------|
-| Bread | White / Wheat / Parmesan Oregano / Honey Oat / Flatbread | 195~237 |
-| Vegetable | Lettuce / Tomato / Pickle / Onion / Avocado | 2.9~56.5 |
-| Meat | Roasted Chicken / Ham / Meatball / Bacon / Pepperoni | 40~210 |
-| Sauce | Sweet Onion / Sweet Chili / Smoke BBQ / Honey Mustard / Ranch | 32~116 |
+| Bread | White / Wheat / Parmesan Oregano / Honey Oat / Flatbread | 195–237 |
+| Vegetable | Lettuce / Tomato / Pickle / Onion / Avocado | 2.9–56.5 |
+| Meat | Roasted Chicken / Ham / Meatball / Bacon / Pepperoni | 40–210 |
+| Sauce | Sweet Onion / Sweet Chili / Smoke BBQ / Honey Mustard / Ranch | 32–116 |
 
 #### 🥪 Sandwich Composition Dataset
-- 625 combinations × 20 ingredients (원핫 인코딩)
-- 각 조합별 포함 재료 표시 (0/1)
+- 625 combinations × 20 ingredients (one-hot encoded)  
+- Indicates inclusion of each ingredient (0/1)
 
 #### 📊 Final Training Table
-- 총 **20,000 user–sandwich 평점 데이터**  
+- Total of **20,000 user–sandwich rating data points**  
 - Columns: `user_id`, `sandwich_id`, `rating`
 
 ---
@@ -81,81 +83,83 @@
 ## 3️⃣ Filtering Methods to Use
 
 ### 3.1 User-Based Collaborative Filtering
-- 사용자 간 유사도를 계산하여 **유사 사용자들의 평점 평균으로 예측**  
-- 예측 평점 테이블 생성 시 활용  
-- 개인 취향 기반 개인화 추천 수행  
+- Calculate similarity between users and **predict missing ratings** using weighted averages  
+  from similar users.  
+- Build predicted rating tables.  
+- Provides **personalized recommendations** based on individual preferences.
 
 ### 3.2 Item-Based Collaborative Filtering
-- 샌드위치 조합 간 유사도를 분석  
-- **비슷한 조합의 재료 패턴**을 이용해 새로운 후보 추천  
-- 다양한 조합 구성을 제시하여 **추천 다양성 확보**
+- Analyze similarity between sandwich combinations.  
+- Recommend new candidates using **ingredient pattern similarity**.  
+- Promotes **diversity of recommendations** through variation in combinations.
 
 ### 3.3 Rule-Based / Attribute-Based Filtering
-- 사용자의 건강 정보 및 식단 정보를 고려하여 다음 규칙 적용:
-  - 알레르기 재료가 포함된 조합은 제외  
-  - 채식주의자는 Meat 대신 **Soy-only 조합**으로 제한  
-  - 다이어트 사용자는 **낮은 칼로리 조합에 가중치 부여**
+- Apply rules based on users’ health and dietary information:
+  - Exclude sandwiches containing allergenic ingredients.  
+  - For vegetarians, limit to **soy-only meat combinations**.  
+  - For diet users, apply **additional weight to low-calorie sandwiches**.
 
 ---
 
 ### Recommendation System Workflow
 
-1. **Matrix Factorization (ALS 기반 MF)**
-   - 평점 테이블과 아이템 테이블을 이용해 MF 모델로 예측 평점 테이블 생성  
-   - 구성 요소:  
+1. **Matrix Factorization (ALS-based MF)**  
+   - Generate predicted rating matrix using MF on the user–sandwich matrix.  
+   - Components:  
+
      | Symbol | Description |
      |:-------|:------------|
-     | **U (500×20)** | 사용자 잠재 벡터 |
-     | **V (20×20)** | 재료 잠재 특성 벡터 |
-     | **S (625×20)** | 샌드위치 조합 구성 벡터 |
-     | **C = S·V (625×20)** | 샌드위치 임베딩 |
-     | **R̂ = U·Cᵀ (500×625)** | 예측 평점 행렬 |
+     | **U (500×20)** | User latent feature matrix |
+     | **V (20×20)** | Ingredient latent feature matrix |
+     | **S (625×20)** | Sandwich composition matrix |
+     | **C = S·V (625×20)** | Sandwich embedding |
+     | **R̂ = U·Cᵀ (500×625)** | Predicted rating matrix |
 
 2. **User-Based CF**  
-   - 사용자 간 유사도를 계산하여 예측 평점 행렬 생성
+   - Compute user similarity and generate predicted ratings.
 
 3. **Hybrid Predicted Ratings**  
-   - User-based CF와 Item-based CF 예측 결과를 **가중 평균**으로 결합  
-   - 상위 50개 샌드위치 후보 선정  
+   - Combine User-based and Item-based CF results using **weighted averaging**.  
+   - Select top 50 sandwich candidates.
 
-4. **Filtering**
-   - 사용자 건강 정보 기반 필터 적용 (알레르기/식이 제한 반영)  
-   - 이미 시도한 조합은 제외  
+4. **Filtering**  
+   - Apply filtering based on users’ health data (allergy/dietary restrictions).  
+   - Exclude sandwiches the user has already tried.
 
-5. **Final Recommendation**
-   - 최종 3개 샌드위치 조합 추천  
-   - Item-based CF를 통해 **다양한 재료 구성**을 보장  
+5. **Final Recommendation**  
+   - Recommend top 3 sandwiches.  
+   - Use Item-based CF to ensure **diverse ingredient combinations**.
 
 ---
 
 ## 4️⃣ Machine Learning Model to Use
 
 ### 4.1 ALS-Based Matrix Factorization (MF)
-- 사용자–샌드위치 평점 행렬을 분해하여 예측 평점 행렬 생성  
-- 사용자, 샌드위치, 재료의 잠재 벡터를 학습  
-- 반복 학습(ALS, Alternating Least Squares)을 통해 손실 함수 최소화  
-- 대규모 희소 행렬(sparse matrix)에 최적화되어 효율적인 성능 발휘  
+- Decompose the user–sandwich rating matrix to predict missing ratings.  
+- Learn latent vectors for users, sandwiches, and ingredients.  
+- Use **Alternating Least Squares (ALS)** to minimize loss iteratively.  
+- Optimized for large-scale **sparse matrices**.
 
-**장점:**  
-- 데이터 희소성 문제 해결  
-- 사용자 및 아이템 잠재 특성 파악 가능  
-- 추천 정확도 향상  
+**Advantages:**  
+- Addresses data sparsity issues.  
+- Captures latent relationships between users and items.  
+- Improves overall recommendation accuracy.
 
 ---
 
 ## 📈 Summary
 
-| 구분 | 접근 방식 | 목적 | 비고 |
-|------|------------|------|------|
-| **User-Based CF** | Memory-based | 유사 사용자 패턴 활용 | 개인화 추천 |
-| **Item-Based CF** | Memory-based | 유사 조합 기반 추천 | 다양성 확보 |
-| **Rule-Based Filtering** | Heuristic | 알레르기/채식/다이어트 반영 | 안전성 강화 |
-| **Matrix Factorization (ALS)** | Model-based | 잠재 요인 학습 | 정확도 향상 |
-| **Hybrid Combination** | Weighted Integration | 세 접근법 통합 | 성능·안정성 향상 |
+| Category | Approach | Objective | Remarks |
+|-----------|-----------|-----------|----------|
+| **User-Based CF** | Memory-based | Utilize similar user patterns | Personalized recommendation |
+| **Item-Based CF** | Memory-based | Recommend similar combinations | Ensures diversity |
+| **Rule-Based Filtering** | Heuristic | Apply allergy/vegetarian/diet restrictions | Increases safety |
+| **Matrix Factorization (ALS)** | Model-based | Learn latent features | Improves accuracy |
+| **Hybrid Combination** | Weighted Integration | Combine multiple methods | Enhances performance & stability |
 
 ---
 
 ## 🧭 Expected Outcomes
-- 사용자의 **건강 정보와 취향을 모두 반영한 추천 시스템** 구축  
-- 채식·알레르기·다이어트 등 **실제 제약조건을 고려한 실용적 추천**  
-- 협업필터링과 행렬분해의 장점을 결합한 **하이브리드 모델**로 높은 추천 품질 달성
+- A **personalized recommendation system** that considers both user preferences and health information.  
+- Practical recommendation reflecting **realistic constraints** such as vegetarianism, allergies, and diet.  
+- A **hybrid model** combining collaborative filtering and matrix factorization to achieve high-quality recommendations.
