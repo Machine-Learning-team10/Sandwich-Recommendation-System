@@ -22,6 +22,16 @@
 
 ---
 
+## 1) 목표와 전제
+- **목표:** 사용자의 선호·제약(채식, 알레르기, 다이어트)을 반영한 **개인 맞춤형 샌드위치 조합 추천**.
+- **데이터 전제:**
+  - `combo.csv`: 조합(샌드위치)별 **원핫 재료 벡터**.
+  - `ingredient_nutrition.csv`: 재료별 **영양정보(칼로리 포함)**.
+  - `user_info.csv`: 사용자별 **diet / vegetarian / allergy** 플래그 및 메타.
+  - `rating_dataset.csv`: 사용자–조합 **평점 행렬**(비어 있는 칸은 미평가).
+
+---
+
 ## ⚙️ System Architecture
 
 ```text
@@ -36,22 +46,8 @@
    [ Diet-aware Re-ranking ]
         ↓
    [ Final Top-N Recommendation Output ]
-
-# 🥪 Personalized Sandwich Recommendation System — Logic & Methods (No Code)
-
-본 문서는 최종 구현된 추천 시스템의 **로직**과 **Proposal 기준(Filtering method to use / Machine Learning model to use)** 을 깔끔히 정리한 설명서입니다. 깃허브에 그대로 복붙해 사용하세요.
-
----
-
-## 1) 목표와 전제
-- **목표:** 사용자의 선호·제약(채식, 알레르기, 다이어트)을 반영한 **개인 맞춤형 샌드위치 조합 추천**.
-- **데이터 전제:**
-  - `combo.csv`: 조합(샌드위치)별 **원핫 재료 벡터**.
-  - `ingredient_nutrition.csv`: 재료별 **영양정보(칼로리 포함)**.
-  - `user_info.csv`: 사용자별 **diet / vegetarian / allergy** 플래그 및 메타.
-  - `rating_dataset.csv`: 사용자–조합 **평점 행렬**(비어 있는 칸은 미평가).
-
----
+```
+ ---
 
 ## 2) 전체 로직 개요 (파이프라인)
 1. **데이터 로딩 및 정합성 맞춤**: `rating`의 열과 `combo`의 인덱스를 `combo_id` 기준으로 일치.
