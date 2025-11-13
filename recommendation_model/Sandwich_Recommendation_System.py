@@ -2,17 +2,23 @@ import numpy as np
 import pandas as pd
 from typing import List, Tuple, Optional, Dict
 import ast
+import os
 
 
 # 데이터 로드 (Google Colab 기준)
 # from google.colab import drive
 # drive.mount('/content/drive')
 
-PATH = "/content/drive/MyDrive"
-df_rating = pd.read_csv(f"{PATH}/rating_dataset.csv", index_col="user_id")
-df_users  = pd.read_csv(f"{PATH}/user_info.csv",     index_col="user_id")
-df_nutri  = pd.read_csv(f"{PATH}/ingredient_nutrition.csv")
-df_combo  = pd.read_csv(f"{PATH}/combo.csv",         index_col="combo_id")
+# 경로 설정(상대경로로 업데이트)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))   # recommendation_model/
+ROOT_DIR = os.path.dirname(BASE_DIR)                    # Sandwich-Recommendation-System/
+PATH = os.path.join(ROOT_DIR, "data")                   # data/
+
+df_rating = pd.read_csv(os.path.join(PATH, "rating_dataset.csv"), index_col="user_id")
+df_users  = pd.read_csv(os.path.join(PATH, "user_info.csv"),     index_col="user_id")
+df_nutri  = pd.read_csv(os.path.join(PATH, "ingredient_nutrition.csv"))
+df_combo  = pd.read_csv(os.path.join(PATH, "combo.csv"),         index_col="combo_id")
 
 
 # 조합 칼로리 & 메타 (SOY 감지 + SOY_ONLY 목록)
