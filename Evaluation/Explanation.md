@@ -3,7 +3,7 @@
 
 **Machine Learning Team 10 — Evaluation Summary**
 
-본 문서는 프로젝트에서 제작된 모델인 **Hybrid Recommendation Model(UserCF + ItemCF + MF)**의 성능을 평가한 결과를 정리한 것입니다.
+본 문서는 프로젝트에서 제작된 모델인 Hybrid Recommendation Model(UserCF + ItemCF + MF)의 성능을 평가한 결과를 정리한 것입니다.
 평가 대상은 `df_pred_hybrid`이며, 실제 평점(`rating_dataset.csv`)과 비교해 정량적으로 분석합니다.
 
 ---
@@ -90,8 +90,8 @@ Hybrid는 다음 세 모델의 결과를 합쳐 생성됨:
 
 Hybrid 모델은:
 
-* **정확한 평점 수치 예측(Regression)**에서는 성능이 낮지만
-* **Top-N 추천 품질(Ranking)**에서는 매우 높은 성능을 보인다.
+* 정확한 평점 수치 예측(Regression)에서는 성능이 낮지만
+* Top-N 추천 품질(Ranking)에서는 매우 높은 성능을 보인다.
 
 📌 최종 요약
 
