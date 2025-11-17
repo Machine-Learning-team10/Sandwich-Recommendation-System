@@ -2,7 +2,7 @@
 **Team Members and Roles:**  
 Song Young-woo (202135546) - Data generation, proposal writing  
 Hyun Gwan (202135596) - Model evaluation  
-Hwang Sung-min (202135599) - System modeling, GitHub documentation  
+Hwang Seong-min (202135599) - System modeling, GitHub documentation  
 Oh Ye-jin (202234908) - ppt creation, Presentation  
 
 ---
