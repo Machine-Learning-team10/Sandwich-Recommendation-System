@@ -2,23 +2,17 @@ import numpy as np
 import pandas as pd
 from typing import List, Tuple, Optional, Dict
 import ast
-import os
 
 
 # 데이터 로드 (Google Colab 기준)
 # from google.colab import drive
 # drive.mount('/content/drive')
 
-# 경로 설정(상대경로로 업데이트)
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))   # recommendation_model/
-ROOT_DIR = os.path.dirname(BASE_DIR)                    # Sandwich-Recommendation-System/
-PATH = os.path.join(ROOT_DIR, "data")                   # data/
-
-df_rating = pd.read_csv(os.path.join(PATH, "rating_dataset.csv"), index_col="user_id")
-df_users  = pd.read_csv(os.path.join(PATH, "user_info.csv"),     index_col="user_id")
-df_nutri  = pd.read_csv(os.path.join(PATH, "ingredient_nutrition.csv"))
-df_combo  = pd.read_csv(os.path.join(PATH, "combo.csv"),         index_col="combo_id")
+PATH = "/content/drive/MyDrive"
+df_rating = pd.read_csv(f"{PATH}/rating_dataset.csv", index_col="user_id")
+df_users  = pd.read_csv(f"{PATH}/user_info.csv",     index_col="user_id")
+df_nutri  = pd.read_csv(f"{PATH}/ingredient_nutrition.csv")
+df_combo  = pd.read_csv(f"{PATH}/combo.csv",         index_col="combo_id")
 
 
 # 조합 칼로리 & 메타 (SOY 감지 + SOY_ONLY 목록)
@@ -107,7 +101,7 @@ def predict_user_based(df: pd.DataFrame, k:int=30) -> pd.DataFrame:
     return df_pred
 
 
-# 5) Item-Based CF (Adjusted Cosine)
+# Item-Based CF (Adjusted Cosine)
 
 def build_item_neighbors(df: pd.DataFrame, k:int=20) -> Dict[str, List[Tuple[str, float]]]:
     items = df.columns.tolist()
@@ -151,50 +145,100 @@ def predict_item_based(df: pd.DataFrame, neighbors: Dict[str, List[Tuple[str, fl
     return df_pred
 
 
-# Biased Matrix Factorization (MF, SGD)
-
+# Biased Matrix Factorization (MF, ALS)
 class MF:
-    def __init__(self, factors: int = 40, epochs: int = 15, lr: float = 0.01, reg: float = 0.02, seed: int = 42):
+    def __init__(self,
+                 factors: int = 40,
+                 epochs: int = 15,
+                 lr: float = 0.01,
+                 reg: float = 0.02,
+                 seed: int = 42):
         self.factors, self.epochs, self.lr, self.reg, self.seed = factors, epochs, lr, reg, seed
 
     def fit(self, df: pd.DataFrame):
         rng = np.random.RandomState(self.seed)
         self.users = df.index.tolist()
         self.items = df.columns.tolist()
-        uid2i = {u:i for i,u in enumerate(self.users)}
-        iid2j = {v:j for j,v in enumerate(self.items)}
+        uid2i = {u: i for i, u in enumerate(self.users)}
+        iid2j = {v: j for j, v in enumerate(self.items)}
 
+        # 관측된 (u, i, r)만 리스트로 수집
         rows = []
         for u in self.users:
             for i in self.items:
                 r = df.at[u, i]
                 if not pd.isna(r):
                     rows.append((uid2i[u], iid2j[i], float(r)))
-        data = np.array(rows, dtype=np.int64)
-        U, I = len(self.users), len(self.items)
-        self.P = 0.1 * rng.randn(U, self.factors)
-        self.Q = 0.1 * rng.randn(I, self.factors)
+
+        if not rows:
+            raise ValueError("No observed ratings in df")
+
+        data = np.array(rows, dtype=np.float64)
+        U = len(self.users)
+        I = len(self.items)
+        K = self.factors
+
+        # 잠재요인 초기화
+        self.P = 0.1 * rng.randn(U, K)
+        self.Q = 0.1 * rng.randn(I, K)
+
+        # 전체 평균 평점 (바이어스 없이 사용)
+        self.mu = float(data[:, 2].mean())
+
+        # 기존 코드와의 호환성을 위해 바이어스 벡터는 0으로만 생성
         self.bu = np.zeros(U)
         self.bi = np.zeros(I)
-        self.mu = float(np.mean([r for _,_,r in rows])) if rows else 0.0
 
+        # 사용자별 / 아이템별 관측값 인덱스 목록
+        user_items = [[] for _ in range(U)]
+        item_users = [[] for _ in range(I)]
+        for u_idx, i_idx, r in data:
+            u_idx = int(u_idx)
+            i_idx = int(i_idx)
+            user_items[u_idx].append((i_idx, r))
+            item_users[i_idx].append((u_idx, r))
+
+        lam = self.reg
+        I_K = np.eye(K)
+
+        # ----- ALS 메인 루프 -----
         for ep in range(self.epochs):
-            rng.shuffle(data)
-            for ui, ij, r in data:
-                pred = self.mu + self.bu[ui] + self.bi[ij] + self.P[ui] @ self.Q[ij]
-                err = r - pred
-                # updates
-                self.bu[ui] += self.lr * (err - self.reg*self.bu[ui])
-                self.bi[ij] += self.lr * (err - self.reg*self.bi[ij])
-                pu = self.P[ui].copy(); qi = self.Q[ij].copy()
-                self.P[ui] += self.lr * (err*qi - self.reg*pu)
-                self.Q[ij] += self.lr * (err*pu - self.reg*qi)
+            # 아이템 고정 → 사용자 잠재벡터 P 업데이트
+            for u in range(U):
+                if not user_items[u]:
+                    continue
+                idxs = [i for (i, _) in user_items[u]]
+                rs = np.array([r for (_, r) in user_items[u]], dtype=np.float64)
+
+                # 유저 u가 평가한 아이템 벡터 모음 (len(I_u) × K)
+                Q_u = self.Q[idxs]
+
+                A = Q_u.T @ Q_u + lam * I_K
+                b = Q_u.T @ (rs - self.mu)
+                self.P[u] = np.linalg.solve(A, b)
+
+            # 사용자 고정 → 아이템 잠재벡터 Q 업데이트
+            for i in range(I):
+                if not item_users[i]:
+                    continue
+                idxs = [u for (u, _) in item_users[i]]
+                rs = np.array([r for (_, r) in item_users[i]], dtype=np.float64)
+
+                # 아이템 i를 평가한 사용자 벡터 모음 (len(U_i) × K)
+                P_i = self.P[idxs]
+
+                A = P_i.T @ P_i + lam * I_K 
+                b = P_i.T @ (rs - self.mu) 
+                self.Q[i] = np.linalg.solve(A, b)
+
+        # 인덱스 매핑 저장
         self.uid2i, self.iid2j = uid2i, iid2j
         return self
 
     def predict_user(self, user_id: str) -> pd.Series:
         ui = self.uid2i[user_id]
-        scores = self.mu + self.bu[ui] + self.bi + self.P[ui] @ self.Q.T
+        # bu, bi는 0으로 두고, mu + P_u Q^T 형태의 예측
+        scores = self.mu + self.P[ui] @ self.Q.T
         scores = np.clip(scores, 0.0, 5.0)
         return pd.Series(scores, index=self.items)
 
