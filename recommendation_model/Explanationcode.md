@@ -15,7 +15,7 @@
 | **Objective** | User Preference + Health Condition 기반 추천 |
 | **Dataset 구성** | `user_info.csv`, `ingredient_nutrition.csv`, `combo.csv`, `rating_dataset.csv` |
 | **Filtering Methods** | User-based CF, Item-based CF, Rule-based Filtering |
-| **Machine Learning Model** | Biased Matrix Factorization (MF) |
+| **Machine Learning Model** | ALS-based Biased Matrix Factorization (MF) |
 | **Hybrid Method** | (UserCF + ItemCF + MF) Weighted Combination |
 | **Special Rules** | Vegetarian → Soy-only Combos, Allergy → Exclude Ingredient Combos |
 | **Diet Mode** | 0.7 × normalized(score) + 0.3 × normalized(-calories) Utility Ranking |
@@ -96,23 +96,34 @@
 
 ## 4) Machine Learning model to use 
 
-### 4.1 Biased Matrix Factorization (MF)
+### 4.1 Biased Matrix Factorization (MF, ALS)
+
 - **모델 수식:**  
   \( \hat{r}_{ui} = \mu + b_u + b_i + P_u^\top Q_i \)  
   - \(\mu\): 전체 평균 평점  
-  - \(b_u, b_i\): 사용자/아이템 바이어스  
+  - \(b_u, b_i\): 사용자/아이템 바이어스(편향)  
   - \(P_u, Q_i\): 사용자/아이템 잠재요인 벡터
-- **학습:** SGD(확률적 경사하강)로 RMSE 최소화 방향 최적화  
-- **장점:** 희소 데이터에서 **일반화** 성능이 뛰어나고, User/Item CF가 놓칠 수 있는 **잠재 패턴**을 포착  
-- **역할:** User/Item CF와 결합했을 때 **하이브리드의 안정성**과 **성능 상한**을 끌어올림
 
-### 4.2 Diet-aware Ranking (Utility)
-- **목적:** diet=True 사용자에게는 “점수는 높지만 **칼로리는 낮은**” 조합을 우선 제시  
-- **유틸리티 정의:**  
-  \( \text{utility} = 0.7 \cdot z(\text{score}) + 0.3 \cdot z(-\text{calories}) \)  
-  - 점수는 클수록 유리, 칼로리는 **낮을수록 유리**(음수 부호)  
-  - 정규화 \(z(\cdot)\) 로 스케일 차이를 보정  
-- **적용:** 후보 Top-N에서 utility 내림차순으로 최종 Top-K 선별
+- **학습 방식 (ALS, Alternating Least Squares):**  
+  - 평점 행렬 \(R\)을 \(P, Q\)로 분해하는 목적함수  
+    \[
+    \min_{P,Q} \sum_{(u,i)} (r_{ui} - \hat{r}_{ui})^2 + \lambda(\|P_u\|^2 + \|Q_i\|^2)
+    \]
+    를 최소화하는 과정에서,  
+  - **사용자 벡터를 고정하고 아이템 벡터 \(Q\)를 최소제곱(least squares)으로 최적화**하고,  
+  - 다시 **아이템 벡터를 고정하고 사용자 벡터 \(P\)를 최소제곱으로 최적화**하는 과정을  
+  - 번갈아(Alternating) 반복하면서 수렴시키는 방식이다.
+
+- **특징 및 장점:**  
+  - 각 단계가 선형회귀(정규화된 최소제곱) 형태라 **수렴이 안정적**이고,  
+  - 사용자/아이템별로 계산이 분리되어 **병렬화·확장성 측면에서 유리**하며,  
+  - User/Item CF가 놓칠 수 있는 **잠재 패턴(‘건강한 조합 vs 헤비한 조합’ 등)**을 학습 가능.  
+
+- **역할:**  
+  - User-based / Item-based CF와 결합했을 때,  
+    - 희소한 평점 행렬에서도 **일반화 성능**을 보완하고  
+    - 하이브리드 모델의 **성능 상한과 안정성**을 높여주는 역할을 한다.
+
 
 ---
 
@@ -158,7 +169,7 @@
 | Filtering | User-based CF | 유사 사용자 활용 | Pearson, mean-centering |
 | Filtering | Item-based CF | 유사 조합 확장 | Adjusted cosine |
 | Filtering | Rule-based | 제약 준수 | Allergy 제외, Vegetarian=Soy-only |
-| ML Model | Biased MF | 일반화/희소성 대응 | μ + bu + bi + P·Q (SGD) |
+| ML Model | Biased MF (ALS) | 일반화/희소성 대응 | μ + bu + bi + P·Q (ALS, alternating least squares) |
 | Ranking | Hybrid | 모델 결합 | 정규화 후 가중합 |
 | Ranking | Diet-aware | 건강 지향 랭킹 | 0.7·z(score)+0.3·z(-cal) |
 
