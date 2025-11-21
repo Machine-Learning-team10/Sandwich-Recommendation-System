@@ -163,7 +163,7 @@
 ## 5. **Model Development**
 
 User-Based CF, Item-Based CF, Matrix Factorization, 그리고 세 모델의 앙상블 방식으로 구성된 **하이브리드 추천 시스템의 모델링 구현 과정**을 설명함.  
-구현은 모두 Python(Pandas + NumPy) 기반으로 이루어지며, 평점 행렬의 희소성뿐 아니라 사용자 제약 조건(알레르기·채식·다이어트)을 함께 처리하도록 코드 레벨에서 설계함. :contentReference[oaicite:0]{index=0}
+구현은 모두 Python(Pandas + NumPy) 기반으로 이루어지며, 평점 행렬의 희소성뿐 아니라 사용자 제약 조건(알레르기·채식·다이어트)을 함께 처리하도록 코드 레벨에서 설계함.
 
 
 ### **5.1 User-Based Collaborative Filtering (UBCF)**
