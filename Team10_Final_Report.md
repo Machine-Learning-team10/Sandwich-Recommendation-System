@@ -165,7 +165,6 @@
 User-Based CF, Item-Based CF, Matrix Factorization, 그리고 세 모델의 앙상블 방식으로 구성된 **하이브리드 추천 시스템의 모델링 구현 과정**을 설명함.  
 구현은 모두 Python(Pandas + NumPy) 기반으로 이루어지며, 평점 행렬의 희소성뿐 아니라 사용자 제약 조건(알레르기·채식·다이어트)을 함께 처리하도록 코드 레벨에서 설계함. :contentReference[oaicite:0]{index=0}
 
----
 
 ### **5.1 User-Based Collaborative Filtering (UBCF)**
 
@@ -195,7 +194,6 @@ UBCF는 `predict_user_based(df, k=30)` 함수로 구현함.
 
 이 함수는 **Pandas의 행/열 접근과 리스트 기반 캐시(`user_sims`)를 활용하여**, 반복적인 유사도 재계산을 피하고, Top-k 이웃만 사용하는 구조로 구현함.
 
----
 
 ### **5.2 Item-Based Collaborative Filtering (IBCF)**
 
@@ -235,7 +233,6 @@ IBCF는 이웃 계산과 예측이 분리된 구조로 구현함.
 
 이 구조는 **이웃 정보(`neighbors`)를 한번만 계산해 캐싱**하고, 예측 시에는 해당 딕셔너리와 기존 평점 DataFrame만 참조하여 효율적으로 Item-based CF를 수행하도록 구현함.
 
----
 
 ### **5.3 Matrix Factorization (MF, ALS 기반)**
 
@@ -284,7 +281,6 @@ MF는 `MF` 클래스로 구현함. 클래스는 `fit(df)`와 `predict_user(user_
 MF는 이처럼 **NumPy 행렬 연산과 `np.linalg.solve`를 직접 사용하여** ALS를 구현하였고,  
 클래스 내부에 사용자/아이템 매핑과 잠재 행렬을 보관함으로써 이후 재사용이 가능하도록 설계함.
 
----
 
 ### **5.4 Hybrid Model (세 모델 가중 앙상블)**
 
@@ -314,7 +310,6 @@ MF는 이처럼 **NumPy 행렬 연산과 `np.linalg.solve`를 직접 사용하�
 최종적으로 이 함수는 **세 모델의 결과를 같은 스케일로 맞춰 가중합한 DataFrame**을 반환하고,  
 이 결과가 이후 추천 단계에서 “기본 점수 행렬”로 사용됨.
 
----
 
 ### **5.5 사용자 제약 조건 반영 코드**
 
@@ -346,7 +341,6 @@ MF는 이처럼 **NumPy 행렬 연산과 `np.linalg.solve`를 직접 사용하�
   - 추천 후보에서 `MEAT_IDS` 중 `SOY_ID`를 제외한 모든 미트 재료가 포함된 조합을 제거하고,
   - 추가로 `SOY_ONLY_IDS`에 속하는 조합만 남기도록 필터링함.
 
----
 
 ### **5.6 엔드투엔드 추천 파이프라인: `recommend_for_user`**
 
