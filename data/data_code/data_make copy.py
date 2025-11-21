@@ -29,11 +29,11 @@ data = {
     "Category": ingredients_ids,
     "Ingredient": ["화이트", "위트", "파마산 오레가노", "허니오트", "플랫브레드",
                    "양상추", "토마토", "피클", "양파", "아보카도",
-                   "로스트 치킨", "햄", "미트볼", "베이컨", "페퍼로니",
+                   "콩고기", "햄", "미트볼", "베이컨", "페퍼로니",
                    "스위트 어니언", "스위트 칠리", "스모크 바비큐", "허니 머스타드", "랜치"],
     "Calories": [195, 195, 207, 237,232,
                  2.9, 7.7, 0.4, 2.8, 56.5,
-                 90, 40, 210, 90, 150,
+                 150, 40, 210, 90, 150,
                  40.1, 40, 32.8, 38.4, 116]
 }
 
@@ -56,7 +56,9 @@ df_data = pd.DataFrame(data_array, index=user_ids, columns=ingredients_ids)
 p_veg = 0.15 
 veg_users = np.random.choice([True, False], size=n_users, p=[p_veg, 1-p_veg])
 df_users["vegetarian"] = veg_users
-data_array[veg_users, 10:15] = -1
+data_array[veg_users, 11:15] = -1
+data_array[veg_users, 10] = 5
+
 
 #1-2  알레르기 정보 적용
 allergy_ingredients_list = [[] for _ in range(n_users)]
@@ -162,19 +164,19 @@ df_rating = pd.DataFrame(Rating,
                          index=user_ids,
                          columns=[f"C{i+1:03d}" for i in range(Rating.shape[1])])
 
-#3 top50 인기 조합, second100 인기 조합 분류
+#3 top100 인기 조합, second200 인기 조합 분류
 combo_mean = df_rating.mean(axis=0)
 sorted_combos = combo_mean.sort_values(ascending=False).index 
-n_top = 50
+n_top = 100
 top_cols_idx = sorted_combos[:n_top]
-n_second = 100
+n_second = 200
 second_cols_idx = sorted_combos[n_top:n_top+n_second]
 df_top = df_rating[top_cols_idx]
 df_rest = df_rating[second_cols_idx]
 
 
-#3-1 top 50개중 유저들이 먹어본 30개 샌드위치 평점 선정
-n_keep = 30  
+#3-1 top 100개중 유저들이 먹어본 80개 샌드위치 평점 선정
+n_keep = 80
 df_top_50 = df_top.copy()  
 for i in range(df_top_50.shape[0]):  
     cols = df_top_50.columns
@@ -183,8 +185,8 @@ for i in range(df_top_50.shape[0]):
     df_top_50.iloc[i, df_top_50.columns.get_indexer(drop_cols)] = np.nan
 
 
-#3-1 second 100개중 유저들이 먹어본 10개 샌드위치 평점 선정
-n_keep = 10  
+#3-1 second 200개중 유저들이 먹어본 100개 샌드위치 평점 선정
+n_keep = 100
 df_rests = df_rest.copy()  
 for i in range(df_rests.shape[0]):  
     cols = df_rests.columns
@@ -197,8 +199,12 @@ df_final = pd.concat([df_top_50, df_rests], axis=1)
 df_final = df_final.reindex(sorted(df_final.columns), axis=1)
 print(df_final) 
 
+
+print(df_final[df_users["vegetarian"]])
+
 #4-1 데이터셋 저장
-df_final.to_csv("rating_dataset.csv", index=True, index_label="user_id")
+df_rating.to_csv("test_rating_dataset.csv", index=True, index_label="user_id") #Test Dataset
+df_final.to_csv("rating_dataset.csv", index=True, index_label="user_id") #Train Dataset
 df_users.to_csv("user_info.csv", index=True, index_label="user_id")
 df_nutrition.to_csv("ingredient_nutrition.csv", index=False)
 df_combo.to_csv("combo.csv", index=True, index_label="combo_id")
