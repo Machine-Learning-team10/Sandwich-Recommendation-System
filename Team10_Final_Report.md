@@ -162,6 +162,228 @@
 
 ## 5. **Model Development**
 
+User-Based CF, Item-Based CF, Matrix Factorization, 그리고 세 모델의 앙상블 방식으로 구성된 **하이브리드 추천 시스템의 모델링 구현 과정**을 설명함.  
+구현은 모두 Python(Pandas + NumPy) 기반으로 이루어지며, 평점 행렬의 희소성뿐 아니라 사용자 제약 조건(알레르기·채식·다이어트)을 함께 처리하도록 코드 레벨에서 설계함. :contentReference[oaicite:0]{index=0}
+
+---
+
+### **5.1 User-Based Collaborative Filtering (UBCF)**
+
+UBCF는 `predict_user_based(df, k=30)` 함수로 구현함.
+
+- **입력/출력 구조**
+  - 입력: `df`는 `user_id`를 인덱스로, `combo_id`를 컬럼으로 가지는 평점 DataFrame 사용.
+  - 출력: 동일한 shape의 DataFrame을 반환하며, `NaN`이었던 위치를 예측 평점으로 채움.
+
+- **유사도 계산 부분**
+  - `pearson_sim(u, v)` 함수 사용.
+  - 각 사용자 `u`에 대해 `df.loc[u]`를 기준으로, 다른 모든 사용자 `v`의 시리즈와 공통 평가 아이템만 골라 Pearson 상관계수 계산함.
+  - 유사도는 딕셔너리 `user_sims[u] = [(v, sim_uv), ...]` 형태로 저장하며,  
+    `sorted(..., key=lambda x: -abs(x[1]))[:k]` 방식으로 상위 k=30명의 이웃만 남김.
+  - 유사도 0이거나 공통 평가가 거의 없는 경우는 `user_sims`에 포함하지 않음.
+
+- **예측 부분**
+  - 최종 DataFrame은 `pred = df.copy()`로 원본을 복사한 후, `NaN`인 위치만 덮어씀.
+  - 각 사용자 `u`, 아이템 `i`에 대해:
+    - 이미 평점이 있으면 그대로 사용.
+    - `NaN`이면:
+      - `user_sims[u]`에서 `(v, sim_uv)`를 순회하면서, `df.loc[v, i]`가 존재하는 이웃만 사용.
+      - 분자: `sim_uv * (r_vi - mean_v)`의 합.
+      - 분모: `|sim_uv|`의 합.
+      - 예측값: `mean_u + (분자 / 분모)` 형태로 계산함.  
+      - 분모가 0인 경우, 이웃이 없는 상황이므로 `mean_u`만 사용.
+
+이 함수는 **Pandas의 행/열 접근과 리스트 기반 캐시(`user_sims`)를 활용하여**, 반복적인 유사도 재계산을 피하고, Top-k 이웃만 사용하는 구조로 구현함.
+
+---
+
+### **5.2 Item-Based Collaborative Filtering (IBCF)**
+
+IBCF는 이웃 계산과 예측이 분리된 구조로 구현함.
+
+#### **(1) 아이템 이웃 계산: `build_item_neighbors(df, k=20)`**
+
+- **입력/출력**
+  - 입력: 사용자×아이템 평점 DataFrame `df`.
+  - 출력: `neighbors` 딕셔너리  
+    → `neighbors[item_i] = [(item_j, sim_ij), ...]` 형태로 저장함.
+
+- **유사도 계산**
+  - 각 아이템 컬럼 이름 리스트를 `items = df.columns.tolist()`로 가져옴.
+  - 이중 for문으로 `(i, j)` 쌍을 순회하며, `adjusted_cosine_item_sim(df[i], df[j], user_means)` 호출.
+  - `user_means = df.mean(axis=1)`을 미리 계산해 사용자 평균을 저장해둔 후,  
+    각 아이템 평점에서 해당 사용자의 평균을 빼서 중심화한 뒤 코사인 유사도 계산함.
+  - 유사도가 0이 아닌 경우만 `sims.append((j, sim_ij))`에 추가함.
+  - 최종적으로 `sims`를 절대값 기준으로 정렬해 상위 k=20개만 남기고 `neighbors[i]`에 저장함.
+
+#### **(2) 평점 예측: `predict_item_based(df, neighbors)`**
+
+- **기본 구조**
+  - `pred = df.copy()`로 원본을 복사하고, `NaN` 위치만 예측값으로 채움.
+  - `df.index`(user_id), `df.columns`(combo_id)를 그대로 유지하여, UBCF 결과와 같은 구조 사용.
+
+- **예측 로직**
+  - 사용자 `u`와 아이템 `i`에 대해:
+    - 기존 평점이 있으면 그대로 사용.
+    - `NaN`이면:
+      - `neighbors[i]` 리스트를 순회하며 `(j, sim_ij)`를 가져옴.
+      - `df.loc[u, j]`가 존재하는 경우에만:
+        - 분자: `sim_ij * r_uj` 합산.
+        - 분모: `|sim_ij|` 합산.
+      - 분모가 0이 아니면 `num/den`을 예측값으로 사용.
+      - 분모가 0이면 `item_mean[i]` (해당 아이템 전체 평균) 또는 전체 평균으로 교체함.
+
+이 구조는 **이웃 정보(`neighbors`)를 한번만 계산해 캐싱**하고, 예측 시에는 해당 딕셔너리와 기존 평점 DataFrame만 참조하여 효율적으로 Item-based CF를 수행하도록 구현함.
+
+---
+
+### **5.3 Matrix Factorization (MF, ALS 기반)**
+
+MF는 `MF` 클래스로 구현함. 클래스는 `fit(df)`와 `predict_user(user_id)` 두 메인 메서드를 제공함.
+
+#### **5.3.1 학습: `fit(df)`**
+
+- **데이터 변환**
+  - `df.index`와 `df.columns`를 기반으로 사용자/아이템 ID를 정수 인덱스로 매핑함.
+    - `uid2i`, `i2uid`, `iid2j`, `j2iid` 딕셔너리 사용.
+  - `df`를 순회하며 `NaN`이 아닌 `(user_idx, item_idx, rating)` 튜플을 `rows` 리스트에 저장하고,  
+    이를 NumPy 배열 `data`로 변환함.
+
+- **파라미터 및 초기화**
+  - `factors`(잠재 차원), `epochs`, `reg`(정규화 계수)는 생성자 인자로 설정함.
+  - 사용자 수 `U`, 아이템 수 `I`, 잠재 차원 `K = self.factors`로 두고:
+    - `P`는 shape `(U, K)`의 랜덤 초기화 행렬.
+    - `Q`는 shape `(I, K)`의 랜덤 초기화 행렬.
+  - 전체 평균 평점 `mu = data[:,2].mean()`을 사용함.
+
+- **보조 구조**
+  - `user_items[u] = [(i, r_ui), ...]`  
+  - `item_users[i] = [(u, r_ui), ...]`  
+  두 개의 딕셔너리에 사용자별/아이템별 관측 평점을 미리 저장해둠.
+
+- **ALS 루프**
+  - for epoch in range(epochs):  
+    - **사용자 업데이트**  
+      - 각 사용자 `u`에 대해:
+        - 해당 사용자가 평가한 아이템들의 잠재 벡터를 모아 `Q_u` 생성.
+        - 평점 벡터 `rs`에서 전체 평균 `mu`를 빼고,  
+          `A = Q_u.T @ Q_u + reg * I`, `b = Q_u.T @ (rs - mu)`를 만든 후  
+          `P[u] = np.linalg.solve(A, b)`로 업데이트함.
+    - **아이템 업데이트**  
+      - 각 아이템 `i`에 대해서도 동일 방식으로 `P_i`와 `rs`를 사용하여 `Q[i]`를 업데이트함.
+
+#### **5.3.2 예측: `predict_user(user_id)`**
+
+- 입력: 문자열 형태의 `user_id`.
+- 처리:
+  - 미리 저장한 `uid2i`에서 내부 인덱스 `ui`를 찾고,  
+    `scores = mu + P[ui] @ Q.T` 연산으로 모든 아이템에 대한 예측값 벡터를 계산함.
+  - `np.clip(scores, 0, 5)`로 평점 범위를 제한함.
+  - 결과는 `pd.Series(scores, index=df.columns)` 형태로 반환함.
+
+MF는 이처럼 **NumPy 행렬 연산과 `np.linalg.solve`를 직접 사용하여** ALS를 구현하였고,  
+클래스 내부에 사용자/아이템 매핑과 잠재 행렬을 보관함으로써 이후 재사용이 가능하도록 설계함.
+
+---
+
+### **5.4 Hybrid Model (세 모델 가중 앙상블)**
+
+하이브리드 모델은 `hybrid_predict(df_user, df_item, mf_model, ...)` 함수로 구현함.
+
+- **입력**
+  - `df_user` : UBCF가 예측한 평점 행렬.
+  - `df_item` : IBCF가 예측한 평점 행렬.
+  - `mf_model` : 위에서 학습한 `MF` 객체.
+  - `w_user`, `w_item`, `w_mf` : 세 모델 가중치 (기본값 0.33, 0.33, 0.34).
+
+- **MF 예측 행렬 생성**
+  - 함수 내부에서 `for user_id in df_user.index:` 루프를 돌며  
+    `mf_model.predict_user(user_id)` 호출.
+  - 각 결과를 모아 `mf_scores` DataFrame 생성 (index/columns를 다른 둘과 동일하게 맞춤).
+
+- **정규화 함수 `norm(df)`**
+  - `lo = df.min().min()`, `hi = df.max().max()`로 전체 최소/최대값 계산.
+  - `hi > lo`인 경우: `(df - lo) / (hi - lo + 1e-8)` 적용.
+  - 값이 모두 같은 경우(hi == lo)는 0 또는 상수 행렬로 처리해 0 division 방지함.
+
+- **가중합**
+  - `U = norm(df_user)`, `I = norm(df_item)`, `M = norm(mf_scores)`로 정규화한 후,
+  - `hybrid = w_user * U + w_item * I + w_mf * M` 계산.
+  - 가중치는 함수 상단에서 `assert abs(w_user + w_item + w_mf - 1.0) < 1e-6`로 검증함.
+
+최종적으로 이 함수는 **세 모델의 결과를 같은 스케일로 맞춰 가중합한 DataFrame**을 반환하고,  
+이 결과가 이후 추천 단계에서 “기본 점수 행렬”로 사용됨.
+
+---
+
+### **5.5 사용자 제약 조건 반영 코드**
+
+사용자 제약 조건은 독립적인 헬퍼 함수들로 구현함.
+
+#### **(1) 알레르기 파싱: `_parse_allergy(val)`**
+
+- `user_info.csv`의 `allergy` 컬럼 값이
+  - `[]`, `['Meat_1', 'Vegtable_3']` 등 문자열 형태로 저장될 수 있음.
+- `ast.literal_eval`을 사용해 실제 Python 리스트로 변환함.
+- 에러 발생 시 빈 리스트 `[]`를 반환해 코드 안전성을 확보함.
+
+#### **(2) 조합 필터링: `combos_with_restriction_mask(combo_df, restricted_ingredients)`**
+
+- 입력: `combo_df` (0/1 원-핫 조합 행렬), 제한 재료 ID 리스트.
+- 처리:
+  - `restricted_ingredients` 중 `combo_df.columns`에 실제 존재하는 열만 필터링해 사용.
+  - 해당 열들의 값을 행 단위로 합산하여, 합이 0보다 크면 해당 조합에 제한 재료가 포함된 것으로 간주함.
+- 반환: `True`/`False` 시리즈로, True인 조합은 추천에서 제외함.
+
+#### **(3) 채식 & 콩고기 메타 정보**
+
+- 코드 상단에서:
+  - `MEAT_IDS` : `"Meat_"` prefix를 가진 컬럼 목록.
+  - `SOY_ID` : `ingredient_nutrition.csv`에서 “콩고기/soy”를 포함한 재료의 Category.
+  - `SOY_ONLY_IDS` :  
+    - 각 조합에서 `MEAT_IDS` 합이 1이고, 그 유일한 미트가 `SOY_ID`인 combo_id만 모아 리스트로 저장.
+- 채식 사용자의 경우:
+  - 추천 후보에서 `MEAT_IDS` 중 `SOY_ID`를 제외한 모든 미트 재료가 포함된 조합을 제거하고,
+  - 추가로 `SOY_ONLY_IDS`에 속하는 조합만 남기도록 필터링함.
+
+---
+
+### **5.6 엔드투엔드 추천 파이프라인: `recommend_for_user`**
+
+최종 추천은 `recommend_for_user(user_id, hybrid_scores, ...)` 함수에서 수행함.
+
+- **입력**
+  - `user_id` : 추천 대상 사용자.
+  - `hybrid_scores` : 5.4에서 만든 하이브리드 점수 DataFrame.
+  - `candidate_pool_n` : 상위 N개 후보 풀 크기 (기본 100).
+  - `final_k` : 최종 추천 개수 (기본 5).
+  - `diet_override`, `diet_rank_mode`, `w_score`, `w_cal` : 다이어트 모드 관련 파라미터.
+
+- **주요 단계**
+  1. `df_users.loc[user_id]`에서 `diet`, `vegetarian`, `allergy` 정보를 불러옴 (`_parse_allergy` 사용).
+  2. `df_rating.loc[user_id].isna()`를 이용해, 아직 평가하지 않은 조합만 필터링함.
+  3. 위 조합들에 대해 `hybrid_scores.loc[user_id]`를 기준으로 점수 내림차순 정렬하여 상위 후보를 구성함.
+  4. 알레르기/채식 정보를 바탕으로 `combos_with_restriction_mask` 및 `SOY_ONLY_IDS`를 적용해  
+     허용되지 않는 조합을 제거함.
+  5. 남은 조합에 대해 칼로리(`combo_calories`)를 붙여 `pool_df`를 구성함.  
+  6. `diet` 여부(또는 `diet_override`)에 따라:
+     - 다이어트가 아니면 `score` 기준으로만 정렬.
+     - 다이어트 모드면:
+       - **`diet_rank_mode="weighted"`**:  
+         점수와 칼로리에 대해 Z-score 정규화 후  
+         `utility = 0.7 * z_score + 0.3 * (-z_calories)` 계산, `utility` 기준 정렬.
+       - **`diet_rank_mode="lexi"`**:  
+         `score` 내림차순, 동률 시 `calories` 오름차순 정렬.
+  7. 최종 상위 `final_k`개 조합과 사용자 제약 정보를 딕셔너리 형태로 반환함.
+
+- **출력 보조**
+  - `ingredient_ids_for(combo_id)` : 해당 조합에 포함된 재료 ID 리스트 반환.
+  - `format_combo_line(combo_id, rec_row, diet_flag)` :  
+    combo_id, score, calories, (utility), ingredients를 한 줄 문자열로 포맷팅하여 콘솔에 출력하는 데 사용함.
+
+이와 같이, 코드 전체는 **UBCF / IBCF / MF 모델의 예측 행렬 생성 → 하이브리드 점수 계산 → 제약 조건 필터링 → Top-k 추천 산출**의 흐름으로 구성되며,  
+각 단계에서 Pandas DataFrame, 딕셔너리 캐시, NumPy 행렬 연산을 적절히 결합하여 구현함.
+
 ---
 
 ## 6. **Experiments & Evaluation**
